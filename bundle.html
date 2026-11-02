@@ -281,14 +281,19 @@
     texts[file] = text
   }
 
-  async function build (html) {
-    var h = document.createElement('html')
-    var t = await read(html)
-    h.innerHTML = t
-    var folder = html.slice(0, html.indexOf('/'))
-    var script = h.getElementsByTagName('script')[0].src.replaceAll('%20', ' ')
-    var file = folder + script.slice(script.lastIndexOf('/'))
-    var output = folder + '.html'
+  async function build (file, type) {
+    var folder = file.slice(0, file.lastIndexOf('/'))
+    if (type == 'html') {
+      var h = document.createElement('html')
+      var t = await read(file)
+      h.innerHTML = t
+      var script = h.getElementsByTagName('script')
+      script = script[script.length - 1].getAttribute('src')
+      file = folder + '/' + script
+      var output = folder + '.html'
+    } else {
+      var output = folder + '.js'
+    }
     var imported = []
     var imports = [file]
     var modules = {}
@@ -312,33 +317,36 @@
     for (var i = 0, length = imported.length; i < length; i++) {
       text += texts[imported[i]]
     }
-    text = '<!doctype html><html><body><script>' + text.slice(0, -1) + '<' + '/script></body></html>'
-    var links = h.getElementsByTagName('link')
-    for (var i = 0, j = 0, length = links.length; i < length; i++) {
-      var link = links[j]
-      if (link.rel == 'icon') {
-        var href = link.href.replaceAll('%20', ' ')
-        link.href = await read(folder + href.slice(href.lastIndexOf('/')), 'data')
-        j++
-      } else if (link.rel == 'stylesheet') {
-        var href = link.href.replaceAll('%20', ' ')
-        var style = document.createElement('style')
-        style.textContent = await read(folder + href.slice(href.lastIndexOf('/')))
-        h.querySelector('head').replaceChild(style, links[j])
+    text = text.slice(0, -1)
+    if (type == 'html') {
+      text = '<!doctype html><html><body><script>' + text + '<' + '/script></body></html>'
+      var links = h.getElementsByTagName('link')
+      for (var i = 0, j = 0, length = links.length; i < length; i++) {
+        var link = links[j]
+        if (link.rel == 'icon') {
+          var href = link.getAttribute('href')
+          link.href = await read(folder + '/' + href, 'data')
+          j++
+        } else if (link.rel == 'stylesheet') {
+          var href = link.getAttribute('href')
+          var style = document.createElement('style')
+          style.textContent = await read(folder + '/' + href)
+          h.querySelector('head').replaceChild(style, links[j])
+        }
       }
-    }
-    h = h.innerHTML
-    h = h.slice(h.indexOf('<head'), h.lastIndexOf('<' + '/script'))
-    t = t.slice(0, t.indexOf('<head')) + h + t.slice(t.lastIndexOf('<' + '/script'))
-    var i = t.indexOf('<script')
-    var j = t.indexOf('<' + '/script')
-    if (i == -1 || j == -1) {
-      i = t.indexOf('</body')
-      if (i != -1) {
-        text = t.slice(0, i) + text.slice(27, -14) + t.slice(i)
+      h = h.innerHTML
+      h = h.slice(h.indexOf('<head'), h.lastIndexOf('<' + '/script'))
+      t = t.slice(0, t.indexOf('<head')) + h + t.slice(t.lastIndexOf('<' + '/script'))
+      var i = t.indexOf('<script')
+      var j = t.indexOf('<' + '/script')
+      if (i == -1 || j == -1) {
+        i = t.indexOf('</body')
+        if (i != -1) {
+          text = t.slice(0, i) + text.slice(27, -14) + t.slice(i)
+        }
+      } else {
+        text = t.slice(0, i) + text.slice(27, -14) + t.slice(j + 9)
       }
-    } else {
-      text = t.slice(0, i) + text.slice(27, -14) + t.slice(j + 9)
     }
     var element = document.createElement('a')
     element.download = output
@@ -346,6 +354,10 @@
     document.body.appendChild(element)
     element.click()
     document.body.removeChild(element)
+  }
+
+  function compile (js) {
+    build(js)
   }
 
   function read (file, type) {
@@ -369,12 +381,23 @@
   }
   names = Object.keys(files)
   names.sort()
+  var html = ''
+  var js = ''
   for (var i = 0, length = names.length; i < length; i++) {
     var name = names[i]
-    if (name.slice(-5) == '.html' && name.split('/').length == 2) {
-      build(name)
+    var extension = name.slice(name.lastIndexOf('.') + 1)
+    var root = name.split('/').length == 2
+    if (root && extension == 'html') {
+      html = name
       break
+    } else if (root && extension == 'js' && js == '') {
+      js = name
     }
+  }
+  if (html) {
+    build(html, 'html')
+  } else if (js) {
+    compile(js)
   }
 }
 
