@@ -10,6 +10,40 @@
   </head>
   <body>
     <script>function handle (event) {
+  var files = {}
+  var names = event.target.files
+  for (var i = 0, length = names.length; i < length; i++) {
+    files[names[i].webkitRelativePath] = names[i]
+  }
+  names = Object.keys(files)
+  names.sort()
+  var html = ''
+  var js = ''
+  for (var i = 0, length = names.length; i < length; i++) {
+    var name = names[i]
+    var extension = name.slice(name.lastIndexOf('.') + 1)
+    var root = name.split('/').length == 2
+    if (extension == 'html' && root) {
+      html = name
+      break
+    } else if (extension == 'js' && js == '' && root) {
+      js = name
+    }
+  }
+
+  function read (file, type) {
+    return new Promise(function (resolve) {
+      var reader = new FileReader()
+      reader.onloadend = function (event) {
+        resolve(event.target.result)
+      }
+      if (type == 'data') {
+        reader.readAsDataURL(files[file])
+      } else {
+        reader.readAsText(files[file])
+      }
+    })
+  }
 
   base64 = '$0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz'
 
@@ -19,15 +53,7 @@
       file = file.slice(0, file.lastIndexOf('/'))
     }
     f = file.slice(0, file.lastIndexOf('/')) + '/' + f
-    var treats = ['', '/', '', '', '/', '\\', '']
-    var tricks = ['~', ':', './', '.\\', '//', '\\\\', '../']
-    for (var i = 0, length = treats.length; i < length; i++) {
-      var treat = treats[i]
-      var trick = tricks[i]
-      while (f.indexOf(trick) != -1) {
-        f = f.replaceAll(trick, treat)
-      }
-    }
+    f = f.replaceAll('./', '')
     var i = f[0]
     while (i == '/' || i == '\\') {
       f = f.slice(1)
@@ -283,16 +309,18 @@
 
   async function build (file, type) {
     var folder = file.slice(0, file.lastIndexOf('/'))
+    var output = folder
+    var h, t
     if (type == 'html') {
-      var h = document.createElement('html')
-      var t = await read(file)
+      h = document.createElement('html')
+      t = await read(file)
       h.innerHTML = t
       var script = h.getElementsByTagName('script')
       script = script[script.length - 1].getAttribute('src')
       file = folder + '/' + script
-      var output = folder + '.html'
+      output += '.html'
     } else {
-      var output = folder + '.js'
+      output += '.js'
     }
     var imported = []
     var imports = [file]
@@ -356,48 +384,10 @@
     document.body.removeChild(element)
   }
 
-  function compile (js) {
-    build(js)
-  }
-
-  function read (file, type) {
-    return new Promise(function (resolve) {
-      var reader = new FileReader()
-      reader.onloadend = function (event) {
-        resolve(event.target.result)
-      }
-      if (type == 'data') {
-        reader.readAsDataURL(files[file])
-      } else {
-        reader.readAsText(files[file])
-      }
-    })
-  }
-
-  var files = {}
-  var names = event.target.files
-  for (var i = 0, length = names.length; i < length; i++) {
-    files[names[i].webkitRelativePath] = names[i]
-  }
-  names = Object.keys(files)
-  names.sort()
-  var html = ''
-  var js = ''
-  for (var i = 0, length = names.length; i < length; i++) {
-    var name = names[i]
-    var extension = name.slice(name.lastIndexOf('.') + 1)
-    var root = name.split('/').length == 2
-    if (root && extension == 'html') {
-      html = name
-      break
-    } else if (root && extension == 'js' && js == '') {
-      js = name
-    }
-  }
   if (html) {
     build(html, 'html')
   } else if (js) {
-    compile(js)
+    build(js)
   }
 }
 
